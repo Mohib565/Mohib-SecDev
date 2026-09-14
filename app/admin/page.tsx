@@ -239,25 +239,22 @@ export default function AdminStudio() {
     e.preventDefault();
     setIsLoggingIn(true);
 
-    try {
-      const { data: authRecord, error } = await supabase
-        .from('admin_auth')
-        .select('*')
-        .eq('id', 1)
-        .single();
+  try {
+      const res = await fetch('/api/admin-login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          username: usernameInput,
+          password: passwordInput,
+        }),
+      });
 
-      if (error || !authRecord) {
-        if (usernameInput === 'admin' && passwordInput === 'admin123') {
-          setIsAuthenticated(true);
-        } else {
-          alert('Access Denied: Invalid credentials.');
-        }
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        setIsAuthenticated(true);
       } else {
-        if (usernameInput === authRecord.username && passwordInput === authRecord.password) {
-          setIsAuthenticated(true);
-        } else {
-          alert('Access Denied: Invalid username or password.');
-        }
+        alert(data.message || 'Access Denied: Invalid credentials.');
       }
     } catch (err: any) {
       alert('Login error: ' + err.message);
@@ -657,38 +654,27 @@ export default function AdminStudio() {
 
     setIsUpdatingPassword(true);
 
-    try {
-      const { data: authRecord, error: fetchErr } = await supabase
-        .from('admin_auth')
-        .select('*')
-        .eq('id', 1)
-        .single();
+ try {
+      const res = await fetch('/api/admin-change-password', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          oldPassword: oldPasswordChange,
+          newPassword: newPasswordChange,
+        }),
+      });
 
-      if (fetchErr || !authRecord) {
-        throw new Error('Database auth table nahi mila. Pehle SQL editor mein table banayein.');
+      const data = await res.json();
+
+      if (res.ok && data.success) {
+        alert('SUCCESS: Password Supabase database mein hamesha ke liye update ho gaya!');
+        setOldPasswordChange('');
+        setNewPasswordChange('');
+        setConfirmPasswordChange('');
+        setCurrentTab('overview');
+      } else {
+        alert(data.message || 'Password update error');
       }
-
-      if (authRecord.password !== oldPasswordChange) {
-        alert('Purana password galat hai!');
-        setIsUpdatingPassword(false);
-        return;
-      }
-
-      const { error: updateErr } = await supabase
-        .from('admin_auth')
-        .update({
-          password: newPasswordChange,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', 1);
-
-      if (updateErr) throw updateErr;
-
-      alert('SUCCESS: Password Supabase database mein hamesha ke liye update ho gaya!');
-      setOldPasswordChange('');
-      setNewPasswordChange('');
-      setConfirmPasswordChange('');
-      setCurrentTab('overview');
     } catch (err: any) {
       alert('Password update error: ' + err.message);
     } finally {
