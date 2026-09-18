@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { supabase } from '@/lib/supabase';
 
@@ -10,7 +10,7 @@ export default function AdminStudio() {
   const [passwordInput, setPasswordInput] = useState('');
   const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-  // Navigation Tabs - Added 'users' tab
+  // Navigation Tabs
   const [currentTab, setCurrentTab] = useState<'overview' | 'users' | 'courses' | 'labs' | 'academic' | 'projects' | 'portfolio_media' | 'profile' | 'security'>('overview');
   
   // Data Records
@@ -49,6 +49,11 @@ export default function AdminStudio() {
 
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgressText, setUploadProgressText] = useState('');
+  const [isUploadingMarkdownImg, setIsUploadingMarkdownImg] = useState(false);
+  const [selectedImageWidth, setSelectedImageWidth] = useState<'100%' | '75%' | '50%'>('100%');
+
+  // Textarea Ref for cursor-position tracking
+  const markdownTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Edit Tracking IDs
   const [editingCourseId, setEditingCourseId] = useState<number | null>(null);
@@ -153,7 +158,6 @@ export default function AdminStudio() {
       const { count: visitsCount } = await supabase.from('site_visits').select('*', { count: 'exact', head: true });
       const { data: profData } = await supabase.from('profile').select('*').eq('id', 1).single();
 
-      // Users activity logs & Visibility settings
       const { data: logsData } = await supabase.from('user_activity_logs').select('*').order('id', { ascending: false }).limit(50);
       const { data: settingsData } = await supabase.from('site_settings').select('*').eq('id', 1).single();
 
@@ -239,7 +243,7 @@ export default function AdminStudio() {
     e.preventDefault();
     setIsLoggingIn(true);
 
-  try {
+    try {
       const res = await fetch('/api/admin-login', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -327,7 +331,42 @@ export default function AdminStudio() {
     return data.publicUrl;
   };
 
-  // Save Visibility Settings (Toggle On/Off)
+  // Insert Image Directly at Cursor Position in Textarea
+  const handleInsertImageAtCursor = async (file: File) => {
+    if (!file) return;
+    setIsUploadingMarkdownImg(true);
+
+    try {
+      const uploadedUrl = await uploadToVault(file, 'markdown_media');
+      const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
+      
+      const imageSnippet = `\n\n<img src="${uploadedUrl}" alt="${cleanName}" style="width: ${selectedImageWidth}; max-width: 100%; border-radius: 12px; margin: 16px auto; display: block; border: 1px solid #e2e8f0;" />\n\n`;
+
+      if (markdownTextareaRef.current) {
+        const textarea = markdownTextareaRef.current;
+        const start = textarea.selectionStart || 0;
+        const end = textarea.selectionEnd || 0;
+        const currentVal = lessonMarkdownContent;
+
+        const updatedContent = currentVal.substring(0, start) + imageSnippet + currentVal.substring(end);
+        setLessonMarkdownContent(updatedContent);
+
+        // Reposition cursor smoothly after inserted snippet
+        setTimeout(() => {
+          textarea.focus();
+          textarea.setSelectionRange(start + imageSnippet.length, start + imageSnippet.length);
+        }, 50);
+      } else {
+        setLessonMarkdownContent((prev) => prev + imageSnippet);
+      }
+    } catch (err: any) {
+      alert('Failed to insert picture: ' + err.message);
+    } finally {
+      setIsUploadingMarkdownImg(false);
+    }
+  };
+
+  // Save Visibility Settings
   const handleToggleVisibility = async (key: keyof typeof visibilitySettings) => {
     const updated = { ...visibilitySettings, [key]: !visibilitySettings[key] };
     setVisibilitySettings(updated);
@@ -654,7 +693,7 @@ export default function AdminStudio() {
 
     setIsUpdatingPassword(true);
 
- try {
+    try {
       const res = await fetch('/api/admin-change-password', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -689,6 +728,69 @@ export default function AdminStudio() {
     if (table === 'modules' && selectedCourseForModules) {
       fetchModulesForCourse(selectedCourseForModules.id);
     }
+  };
+
+  // Render Parser for Rich Live Preview (Parses Headings, Images, HTML, Code, Bold)
+  const renderInteractiveMarkdownPreview = (content: string) => {
+    if (!content) {
+      return <p className="text-slate-400 italic">No notes content written yet.</p>;
+    }
+
+    const lines = content.split('\n');
+    return lines.map((line, idx) => {
+      const trimmed = line.trim();
+
+      // HTML img tags
+      if (trimmed.startsWith('<img') && trimmed.endsWith('/>')) {
+        return (
+          <div key={idx} className="my-4" dangerouslySetInnerHTML={{ __html: trimmed }} />
+        );
+      }
+
+      // Markdown img: ![alt](url)
+      const mdImgMatch = trimmed.match(/^!\[(.*?)\]\((.*?)\)$/);
+      if (mdImgMatch) {
+        return (
+          <div key={idx} className="my-4 text-center">
+            <img
+              src={mdImgMatch[2]}
+              alt={mdImgMatch[1]}
+              style={{ width: selectedImageWidth, maxWidth: '100%' }}
+              className="rounded-xl border border-slate-200 shadow-md mx-auto block"
+            />
+            {mdImgMatch[1] && (
+              <span className="text-[11px] text-slate-400 block mt-1.5 font-mono">{mdImgMatch[1]}</span>
+            )}
+          </div>
+        );
+      }
+
+      // Headings
+      if (trimmed.startsWith('# ')) return <h1 key={idx} className="text-xl font-black text-slate-900 mt-5 mb-2">{trimmed.replace('# ', '')}</h1>;
+      if (trimmed.startsWith('## ')) return <h2 key={idx} className="text-lg font-bold text-slate-900 mt-4 mb-2">{trimmed.replace('## ', '')}</h2>;
+      if (trimmed.startsWith('### ')) return <h3 key={idx} className="text-sm font-bold text-slate-800 mt-3 mb-1.5">{trimmed.replace('### ', '')}</h3>;
+
+      // Divider
+      if (trimmed === '---') return <hr key={idx} className="my-4 border-slate-200" />;
+
+      // Blockquotes
+      if (trimmed.startsWith('> ')) {
+        return (
+          <blockquote key={idx} className="border-l-4 border-emerald-500 pl-3 py-1 my-2 bg-emerald-50/50 text-slate-700 text-xs italic">
+            {trimmed.replace('> ', '')}
+          </blockquote>
+        );
+      }
+
+      // Code line or empty
+      if (!trimmed) return <div key={idx} className="h-2" />;
+
+      return (
+        <p key={idx} className="text-xs text-slate-700 leading-relaxed">
+          {trimmed}
+        </p>
+      );
+    });
   };
 
   if (!isAuthenticated) {
@@ -744,7 +846,6 @@ export default function AdminStudio() {
               <span>⊞ Overview</span>
             </button>
 
-            {/* USERS & VISIBILITY CONTROL TAB (NEW) */}
             <button
               onClick={() => { setCurrentTab('users'); setSelectedCourseForModules(null); }}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition ${
@@ -755,7 +856,6 @@ export default function AdminStudio() {
               <span className="text-[10px] bg-emerald-900/80 px-2 py-0.5 rounded text-emerald-300 font-mono">Live</span>
             </button>
 
-            {/* MY LEARNING TRACKS */}
             <button
               onClick={() => { setCurrentTab('courses'); setSelectedCourseForModules(null); }}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition ${
@@ -766,7 +866,6 @@ export default function AdminStudio() {
               <span className="text-[10px] bg-[#1d4333] px-2 py-0.5 rounded-full text-emerald-300 font-mono">{topics.length}</span>
             </button>
 
-            {/* LAB PROOFS */}
             <button
               onClick={() => { setCurrentTab('labs'); setSelectedCourseForModules(null); }}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition ${
@@ -777,7 +876,6 @@ export default function AdminStudio() {
               <span className="text-[10px] bg-[#1d4333] px-2 py-0.5 rounded-full text-emerald-300 font-mono">{labProofs.length}</span>
             </button>
 
-            {/* ACADEMIC VAULT */}
             <button
               onClick={() => { setCurrentTab('academic'); setSelectedCourseForModules(null); }}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition ${
@@ -788,7 +886,6 @@ export default function AdminStudio() {
               <span className="text-[10px] bg-[#1d4333] px-2 py-0.5 rounded-full text-emerald-300 font-mono">{coursework.length}</span>
             </button>
 
-            {/* LIVE PROJECTS */}
             <button
               onClick={() => { setCurrentTab('projects'); setSelectedCourseForModules(null); }}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition ${
@@ -799,7 +896,6 @@ export default function AdminStudio() {
               <span className="text-[10px] bg-[#1d4333] px-2 py-0.5 rounded-full text-emerald-300 font-mono">{projects.length}</span>
             </button>
 
-            {/* CERTIFICATES & OFFERS */}
             <button
               onClick={() => { setCurrentTab('portfolio_media'); setSelectedCourseForModules(null); }}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition ${
@@ -810,7 +906,6 @@ export default function AdminStudio() {
               <span className="text-[10px] bg-[#1d4333] px-2 py-0.5 rounded-full text-emerald-300 font-mono">{certificates.length + journeyLogs.length}</span>
             </button>
 
-            {/* ABOUT ME CMS */}
             <button
               onClick={() => { setCurrentTab('profile'); setSelectedCourseForModules(null); }}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition ${
@@ -821,7 +916,6 @@ export default function AdminStudio() {
               <span className="text-[10px] bg-emerald-900/80 px-2 py-0.5 rounded text-emerald-300 font-mono">Dynamic</span>
             </button>
 
-            {/* SECURITY */}
             <button
               onClick={() => { setCurrentTab('security'); setSelectedCourseForModules(null); }}
               className={`w-full flex items-center justify-between px-3 py-2.5 rounded-lg transition ${
@@ -886,7 +980,7 @@ export default function AdminStudio() {
             </div>
           )}
 
-          {/* TAB: USERS & ACTIVITY (NEW) */}
+          {/* TAB: USERS & ACTIVITY */}
           {currentTab === 'users' && !selectedCourseForModules && (
             <div className="space-y-8">
               <div>
@@ -900,7 +994,6 @@ export default function AdminStudio() {
                   <span>🎛️</span> Section Visibility Controls (Toggle ON / OFF for Public Visitors)
                 </h2>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 pt-2">
-                  {/* Toggle Labs */}
                   <div className="p-4 border rounded-2xl flex items-center justify-between bg-slate-50">
                     <div>
                       <div className="text-xs font-bold text-slate-900">Lab Proofs Vault</div>
@@ -916,7 +1009,6 @@ export default function AdminStudio() {
                     </button>
                   </div>
 
-                  {/* Toggle Certificates */}
                   <div className="p-4 border rounded-2xl flex items-center justify-between bg-slate-50">
                     <div>
                       <div className="text-xs font-bold text-slate-900">Certificates &amp; Offers</div>
@@ -932,7 +1024,6 @@ export default function AdminStudio() {
                     </button>
                   </div>
 
-                  {/* Toggle Academic Vault */}
                   <div className="p-4 border rounded-2xl flex items-center justify-between bg-slate-50">
                     <div>
                       <div className="text-xs font-bold text-slate-900">Academic Vault</div>
@@ -948,7 +1039,6 @@ export default function AdminStudio() {
                     </button>
                   </div>
 
-                  {/* Toggle Projects */}
                   <div className="p-4 border rounded-2xl flex items-center justify-between bg-slate-50">
                     <div>
                       <div className="text-xs font-bold text-slate-900">Live Projects</div>
@@ -1141,6 +1231,7 @@ export default function AdminStudio() {
               </div>
 
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                {/* Left Pane: Sub-Modules List */}
                 <div className="lg:col-span-4 bg-white border border-slate-200 rounded-3xl p-4 shadow-sm space-y-3">
                   <div className="flex justify-between items-center px-2">
                     <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Sub-Modules List</span>
@@ -1189,6 +1280,7 @@ export default function AdminStudio() {
                   </div>
                 </div>
 
+                {/* Right Pane: Markdown Content Editor & Interactive Preview */}
                 <div className="lg:col-span-8 bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-5">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
                     <div>
@@ -1231,24 +1323,72 @@ export default function AdminStudio() {
                       />
                     </div>
 
+                    {/* Content Area with Cursor-Position Image Inserter & Size Selector */}
                     <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1 flex items-center justify-between">
-                        <span>Technical Notes Content (Markdown Syntax)</span>
-                        <span className="text-[10px] font-mono text-slate-400">Supports # headings, code blocks, lists</span>
-                      </label>
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                        <label className="text-xs font-bold text-slate-700">
+                          Technical Notes Content (Markdown Syntax)
+                        </label>
+
+                        {/* Image Size Selection & Insert Button */}
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center bg-slate-100 rounded-lg p-0.5 text-[11px] font-mono">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedImageWidth('50%')}
+                              className={`px-2 py-0.5 rounded ${selectedImageWidth === '50%' ? 'bg-white font-bold text-emerald-800 shadow-sm' : 'text-slate-500'}`}
+                              title="Medium Image Size (50% Width)"
+                            >
+                              50%
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedImageWidth('75%')}
+                              className={`px-2 py-0.5 rounded ${selectedImageWidth === '75%' ? 'bg-white font-bold text-emerald-800 shadow-sm' : 'text-slate-500'}`}
+                              title="Large Image Size (75% Width)"
+                            >
+                              75%
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedImageWidth('100%')}
+                              className={`px-2 py-0.5 rounded ${selectedImageWidth === '100%' ? 'bg-white font-bold text-emerald-800 shadow-sm' : 'text-slate-500'}`}
+                              title="Full Width Image (100%)"
+                            >
+                              100%
+                            </button>
+                          </div>
+
+                          <label className="cursor-pointer bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition shadow-sm">
+                            <span>🖼️</span> {isUploadingMarkdownImg ? 'Uploading...' : '+ Insert Picture at Cursor'}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              disabled={isUploadingMarkdownImg}
+                              onChange={(e) => {
+                                if (e.target.files && e.target.files[0]) {
+                                  handleInsertImageAtCursor(e.target.files[0]);
+                                }
+                              }}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
+                      </div>
 
                       {editorPreviewMode === 'write' ? (
                         <textarea
-                          rows={14}
+                          ref={markdownTextareaRef}
+                          rows={15}
                           required
                           value={lessonMarkdownContent}
                           onChange={(e) => setLessonMarkdownContent(e.target.value)}
-                          placeholder="Write technical notes here..."
+                          placeholder="Write technical notes here... Click inside anywhere and press '+ Insert Picture at Cursor' to insert your screenshots exactly there."
                           className="w-full font-mono text-xs border rounded-xl p-4 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none leading-relaxed"
                         />
                       ) : (
-                        <div className="w-full min-h-[300px] max-h-[500px] overflow-y-auto border rounded-xl p-5 bg-slate-50 font-sans text-xs space-y-3 leading-relaxed whitespace-pre-wrap">
-                          {lessonMarkdownContent}
+                        <div className="w-full min-h-[350px] max-h-[550px] overflow-y-auto border rounded-xl p-6 bg-slate-50 font-sans text-xs space-y-3 leading-relaxed">
+                          {renderInteractiveMarkdownPreview(lessonMarkdownContent)}
                         </div>
                       )}
                     </div>
@@ -1980,7 +2120,7 @@ export default function AdminStudio() {
               <input type="file" accept=".pdf" onChange={(e) => setCertPdfFile(e.target.files ? e.target.files[0] : null)} className="w-full border rounded-lg p-1.5 text-xs bg-slate-50" />
             </div>
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
-              <button type="button" onClick={() => setIsCourseModalOpen(false)} className="px-3 py-1.5 text-xs text-slate-600">Cancel</button>
+              <button type="button" onClick={() => setIsCertModalOpen(false)} className="px-3 py-1.5 text-xs text-slate-600">Cancel</button>
               <button type="submit" disabled={isUploading} className="bg-emerald-600 text-white px-4 py-1.5 rounded-lg text-xs font-semibold disabled:bg-slate-400">
                 {isUploading ? 'Saving...' : 'Save Certificate'}
               </button>
