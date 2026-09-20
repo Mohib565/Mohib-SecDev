@@ -51,6 +51,9 @@ export default function AdminStudio() {
   const [uploadProgressText, setUploadProgressText] = useState('');
   const [isUploadingMarkdownImg, setIsUploadingMarkdownImg] = useState(false);
 
+  // Image Resizing Scale State (50%, 75%, 100%)
+  const [imageSizeScale, setImageSizeScale] = useState<'50%' | '75%' | '100%'>('75%');
+
   // Textarea Ref for cursor position tracking
   const markdownTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
@@ -330,7 +333,7 @@ export default function AdminStudio() {
     return data.publicUrl;
   };
 
-  // Standard Markdown format insertion (Permanent Solution for public site)
+  // Insert Image Directly at Cursor Position with Width Scale Tag
   const handleInsertImageAtCursor = async (file: File) => {
     if (!file) return;
     setIsUploadingMarkdownImg(true);
@@ -339,8 +342,8 @@ export default function AdminStudio() {
       const uploadedUrl = await uploadToVault(file, 'markdown_media');
       const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
       
-      // Standard Markdown: Har platform aur public view par natively display hota hai
-      const imageSnippet = `\n\n![${cleanName}](${uploadedUrl})\n\n`;
+      // Standard markdown with scale annotation (e.g. ![Architecture Diagram | 75%](url))
+      const imageSnippet = `\n\n![${cleanName} | ${imageSizeScale}](${uploadedUrl})\n\n`;
 
       if (markdownTextareaRef.current) {
         const textarea = markdownTextareaRef.current;
@@ -729,7 +732,7 @@ export default function AdminStudio() {
     }
   };
 
-  // Clean Markdown Parser for Studio Preview
+  // Clean Markdown Parser with 50%, 75%, 100% Size Support in Preview
   const renderInteractiveMarkdownPreview = (content: string) => {
     if (!content) {
       return <p className="text-slate-400 italic">No notes content written yet.</p>;
@@ -739,18 +742,35 @@ export default function AdminStudio() {
     return lines.map((line, idx) => {
       const trimmed = line.trim();
 
-      // Markdown image match: ![alt](url)
+      // Markdown image match: ![alt](url) or ![alt | 75%](url)
       const mdImgMatch = trimmed.match(/^!\[(.*?)\]\((.*?)\)$/);
       if (mdImgMatch) {
+        const rawAlt = mdImgMatch[1];
+        const imgUrl = mdImgMatch[2];
+        
+        let widthClass = 'w-full max-w-full';
+        let cleanAlt = rawAlt;
+
+        if (rawAlt.includes('50%')) {
+          widthClass = 'w-1/2 max-w-[50%]';
+          cleanAlt = rawAlt.replace(/\|\s*50%/g, '').trim();
+        } else if (rawAlt.includes('75%')) {
+          widthClass = 'w-3/4 max-w-[75%]';
+          cleanAlt = rawAlt.replace(/\|\s*75%/g, '').trim();
+        } else if (rawAlt.includes('100%')) {
+          widthClass = 'w-full max-w-full';
+          cleanAlt = rawAlt.replace(/\|\s*100%/g, '').trim();
+        }
+
         return (
-          <div key={idx} className="my-5 text-center">
+          <div key={idx} className="my-5 text-center flex flex-col items-center justify-center">
             <img
-              src={mdImgMatch[2]}
-              alt={mdImgMatch[1]}
-              className="rounded-2xl border border-slate-200 shadow-md max-w-full h-auto mx-auto block max-h-[500px]"
+              src={imgUrl}
+              alt={cleanAlt}
+              className={`${widthClass} rounded-2xl border border-slate-200 shadow-md h-auto block max-h-[550px] transition-all`}
             />
-            {mdImgMatch[1] && (
-              <span className="text-[11px] text-slate-400 block mt-2 font-mono">{mdImgMatch[1]}</span>
+            {cleanAlt && (
+              <span className="text-[11px] text-slate-400 block mt-2 font-mono">{cleanAlt}</span>
             )}
           </div>
         );
@@ -1318,27 +1338,57 @@ export default function AdminStudio() {
                       />
                     </div>
 
-                    {/* Markdown Content Area */}
+                    {/* Markdown Content Area with 50%, 75%, 100% Size Selectors */}
                     <div>
-                      <div className="flex items-center justify-between gap-2 mb-2">
+                      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                         <label className="text-xs font-bold text-slate-700">
                           Technical Notes Content (Markdown Syntax)
                         </label>
 
-                        <label className="cursor-pointer bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition shadow-sm">
-                          <span>🖼️</span> {isUploadingMarkdownImg ? 'Uploading Picture...' : '+ Insert Picture at Cursor'}
-                          <input
-                            type="file"
-                            accept="image/*"
-                            disabled={isUploadingMarkdownImg}
-                            onChange={(e) => {
-                              if (e.target.files && e.target.files[0]) {
-                                handleInsertImageAtCursor(e.target.files[0]);
-                              }
-                            }}
-                            className="hidden"
-                          />
-                        </label>
+                        {/* Image Size Selection & Insert Button */}
+                        <div className="flex items-center gap-2">
+                          <div className="flex items-center bg-slate-100 border border-slate-200 rounded-lg p-0.5 text-[11px] font-mono">
+                            <button
+                              type="button"
+                              onClick={() => setImageSizeScale('50%')}
+                              className={`px-2 py-0.5 rounded transition ${imageSizeScale === '50%' ? 'bg-emerald-600 text-white font-bold shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+                              title="Medium Image Size (50% Width)"
+                            >
+                              50%
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setImageSizeScale('75%')}
+                              className={`px-2 py-0.5 rounded transition ${imageSizeScale === '75%' ? 'bg-emerald-600 text-white font-bold shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+                              title="Standard Image Size (75% Width)"
+                            >
+                              75%
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setImageSizeScale('100%')}
+                              className={`px-2 py-0.5 rounded transition ${imageSizeScale === '100%' ? 'bg-emerald-600 text-white font-bold shadow-sm' : 'text-slate-600 hover:text-slate-900'}`}
+                              title="Full Width Image (100%)"
+                            >
+                              100%
+                            </button>
+                          </div>
+
+                          <label className="cursor-pointer bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition shadow-sm">
+                            <span>🖼️</span> {isUploadingMarkdownImg ? 'Uploading Picture...' : `+ Insert Picture (${imageSizeScale})`}
+                            <input
+                              type="file"
+                              accept="image/*"
+                              disabled={isUploadingMarkdownImg}
+                              onChange={(e) => {
+                                if (e.target.files && e.target.files[0]) {
+                                  handleInsertImageAtCursor(e.target.files[0]);
+                                }
+                              }}
+                              className="hidden"
+                            />
+                          </label>
+                        </div>
                       </div>
 
                       {editorPreviewMode === 'write' ? (
@@ -1348,7 +1398,7 @@ export default function AdminStudio() {
                           required
                           value={lessonMarkdownContent}
                           onChange={(e) => setLessonMarkdownContent(e.target.value)}
-                          placeholder="Type notes here... Click anywhere inside the text and click '+ Insert Picture at Cursor' to insert diagrams exactly there."
+                          placeholder="Type notes here... Select size (50%, 75%, 100%), click cursor anywhere in text, and press '+ Insert Picture' to insert."
                           className="w-full font-mono text-xs border rounded-xl p-4 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none leading-relaxed"
                         />
                       ) : (
@@ -1866,7 +1916,7 @@ export default function AdminStudio() {
         </div>
       </main>
 
-      {/* MODALS */}
+      {/* MODAL: COURSE TRACK */}
       {isCourseModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <form onSubmit={handleSaveCourse} className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-xl border max-h-[90vh] overflow-y-auto">
@@ -1914,6 +1964,7 @@ export default function AdminStudio() {
         </div>
       )}
 
+      {/* MODAL: LAB PROOF */}
       {isLabModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <form onSubmit={handleSaveLabProof} className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-xl border">
