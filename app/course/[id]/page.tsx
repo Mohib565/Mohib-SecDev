@@ -97,6 +97,54 @@ export default function CourseDetailPage() {
                 remarkPlugins={[remarkGfm, remarkMath]}
                 rehypePlugins={[rehypeKatex]}
                 components={{
+                  // Isolated Image Renderer (Guaranteed 50%, 75%, 100% Support)
+                  img: ({ node, ...props }) => {
+                    const src = String(props.src || '');
+                    const alt = String(props.alt || '');
+
+                    let targetWidth = '100%';
+
+                    if (src.includes('#50') || alt.includes('50%')) {
+                      targetWidth = '50%';
+                    } else if (src.includes('#75') || alt.includes('75%')) {
+                      targetWidth = '75%';
+                    } else if (src.includes('#100') || alt.includes('100%')) {
+                      targetWidth = '100%';
+                    }
+
+                    const displayAlt = alt.replace(/\|\s*(50%|75%|100%)/g, '').replace(/#(50|75|100)/g, '').trim();
+
+                    return (
+                      <span
+                        className="not-prose my-6 text-center"
+                        style={{
+                          width: targetWidth,
+                          maxWidth: '100%',
+                          marginLeft: 'auto',
+                          marginRight: 'auto',
+                          display: 'block'
+                        }}
+                      >
+                        <img
+                          {...props}
+                          style={{
+                            width: '100%',
+                            height: 'auto',
+                            display: 'block',
+                            borderRadius: '16px',
+                            border: '1px solid #e2e8f0',
+                            boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)'
+                          }}
+                          loading="lazy"
+                        />
+                        {displayAlt && (
+                          <span className="block text-center text-[11px] text-slate-400 font-mono mt-2">
+                            {displayAlt}
+                          </span>
+                        )}
+                      </span>
+                    );
+                  },
                   h1: ({ children }) => (
                     <h1 className="text-xl sm:text-2xl font-black text-slate-900 mt-7 mb-3 tracking-tight border-b border-slate-100 pb-2">
                       {children}

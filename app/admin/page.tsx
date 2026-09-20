@@ -333,7 +333,7 @@ export default function AdminStudio() {
     return data.publicUrl;
   };
 
-  // Insert Image Directly at Cursor Position with Width Scale Tag
+ // Insert Image Directly at Cursor Position with Width Scale Tag
   const handleInsertImageAtCursor = async (file: File) => {
     if (!file) return;
     setIsUploadingMarkdownImg(true);
@@ -342,8 +342,9 @@ export default function AdminStudio() {
       const uploadedUrl = await uploadToVault(file, 'markdown_media');
       const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
       
-      // Standard markdown with scale annotation (e.g. ![Architecture Diagram | 75%](url))
-      const imageSnippet = `\n\n![${cleanName} | ${imageSizeScale}](${uploadedUrl})\n\n`;
+      // Hash size tag (#50, #75, #100) jo public page bhi pakarta hai aur standard markdown bhi rehta hai
+      const sizeTag = imageSizeScale.replace('%', '');
+      const imageSnippet = `\n\n![${cleanName} | ${imageSizeScale}](${uploadedUrl}#${sizeTag})\n\n`;
 
       if (markdownTextareaRef.current) {
         const textarea = markdownTextareaRef.current;
@@ -367,7 +368,6 @@ export default function AdminStudio() {
       setIsUploadingMarkdownImg(false);
     }
   };
-
   // Save Visibility Settings
   const handleToggleVisibility = async (key: keyof typeof visibilitySettings) => {
     const updated = { ...visibilitySettings, [key]: !visibilitySettings[key] };
