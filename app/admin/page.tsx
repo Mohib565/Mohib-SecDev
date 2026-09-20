@@ -50,9 +50,8 @@ export default function AdminStudio() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadProgressText, setUploadProgressText] = useState('');
   const [isUploadingMarkdownImg, setIsUploadingMarkdownImg] = useState(false);
-  const [selectedImageWidth, setSelectedImageWidth] = useState<'100%' | '75%' | '50%'>('100%');
 
-  // Textarea Ref for cursor-position tracking
+  // Textarea Ref for cursor position tracking
   const markdownTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   // Edit Tracking IDs
@@ -331,7 +330,7 @@ export default function AdminStudio() {
     return data.publicUrl;
   };
 
-  // Insert Image Directly at Cursor Position in Textarea
+  // Standard Markdown format insertion (Permanent Solution for public site)
   const handleInsertImageAtCursor = async (file: File) => {
     if (!file) return;
     setIsUploadingMarkdownImg(true);
@@ -340,7 +339,8 @@ export default function AdminStudio() {
       const uploadedUrl = await uploadToVault(file, 'markdown_media');
       const cleanName = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
       
-      const imageSnippet = `\n\n<img src="${uploadedUrl}" alt="${cleanName}" style="width: ${selectedImageWidth}; max-width: 100%; border-radius: 12px; margin: 16px auto; display: block; border: 1px solid #e2e8f0;" />\n\n`;
+      // Standard Markdown: Har platform aur public view par natively display hota hai
+      const imageSnippet = `\n\n![${cleanName}](${uploadedUrl})\n\n`;
 
       if (markdownTextareaRef.current) {
         const textarea = markdownTextareaRef.current;
@@ -351,7 +351,6 @@ export default function AdminStudio() {
         const updatedContent = currentVal.substring(0, start) + imageSnippet + currentVal.substring(end);
         setLessonMarkdownContent(updatedContent);
 
-        // Reposition cursor smoothly after inserted snippet
         setTimeout(() => {
           textarea.focus();
           textarea.setSelectionRange(start + imageSnippet.length, start + imageSnippet.length);
@@ -681,7 +680,7 @@ export default function AdminStudio() {
     }
   };
 
-  // PASSWORD UPDATE: Direct Supabase Database Mutation
+  // PASSWORD UPDATE
   const handleUpdatePassword = async (e: React.FormEvent) => {
     e.preventDefault();
     if (newPasswordChange !== confirmPasswordChange) {
@@ -730,7 +729,7 @@ export default function AdminStudio() {
     }
   };
 
-  // Render Parser for Rich Live Preview (Parses Headings, Images, HTML, Code, Bold)
+  // Clean Markdown Parser for Studio Preview
   const renderInteractiveMarkdownPreview = (content: string) => {
     if (!content) {
       return <p className="text-slate-400 italic">No notes content written yet.</p>;
@@ -740,29 +739,26 @@ export default function AdminStudio() {
     return lines.map((line, idx) => {
       const trimmed = line.trim();
 
-      // HTML img tags
-      if (trimmed.startsWith('<img') && trimmed.endsWith('/>')) {
-        return (
-          <div key={idx} className="my-4" dangerouslySetInnerHTML={{ __html: trimmed }} />
-        );
-      }
-
-      // Markdown img: ![alt](url)
+      // Markdown image match: ![alt](url)
       const mdImgMatch = trimmed.match(/^!\[(.*?)\]\((.*?)\)$/);
       if (mdImgMatch) {
         return (
-          <div key={idx} className="my-4 text-center">
+          <div key={idx} className="my-5 text-center">
             <img
               src={mdImgMatch[2]}
               alt={mdImgMatch[1]}
-              style={{ width: selectedImageWidth, maxWidth: '100%' }}
-              className="rounded-xl border border-slate-200 shadow-md mx-auto block"
+              className="rounded-2xl border border-slate-200 shadow-md max-w-full h-auto mx-auto block max-h-[500px]"
             />
             {mdImgMatch[1] && (
-              <span className="text-[11px] text-slate-400 block mt-1.5 font-mono">{mdImgMatch[1]}</span>
+              <span className="text-[11px] text-slate-400 block mt-2 font-mono">{mdImgMatch[1]}</span>
             )}
           </div>
         );
+      }
+
+      // Legacy HTML image support if present
+      if (trimmed.startsWith('<img') && trimmed.endsWith('/>')) {
+        return <div key={idx} className="my-4" dangerouslySetInnerHTML={{ __html: trimmed }} />;
       }
 
       // Headings
@@ -782,7 +778,6 @@ export default function AdminStudio() {
         );
       }
 
-      // Code line or empty
       if (!trimmed) return <div key={idx} className="h-2" />;
 
       return (
@@ -988,7 +983,7 @@ export default function AdminStudio() {
                 <p className="text-xs text-slate-500 mt-1">Track visitor interactions, PDF downloads, and toggle public sections ON or OFF.</p>
               </div>
 
-              {/* 1. SECTION VISIBILITY CONTROLS (ON / OFF SWITCHES) */}
+              {/* SECTION VISIBILITY CONTROLS */}
               <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
                 <h2 className="text-sm font-bold text-slate-900 uppercase tracking-wider flex items-center gap-2">
                   <span>🎛️</span> Section Visibility Controls (Toggle ON / OFF for Public Visitors)
@@ -1056,7 +1051,7 @@ export default function AdminStudio() {
                 </div>
               </div>
 
-              {/* 2. VISITOR DOWNLOADS & ACTIVITY LOGS TABLE */}
+              {/* VISITOR DOWNLOADS TABLE */}
               <div className="bg-white rounded-3xl border border-slate-200 overflow-hidden shadow-sm space-y-4 p-6">
                 <div className="flex justify-between items-center">
                   <div>
@@ -1205,7 +1200,7 @@ export default function AdminStudio() {
             </div>
           )}
 
-          {/* TWO-PANE MARKDOWN NOTES & SUB-MODULES STUDIO */}
+          {/* TWO-PANE MARKDOWN NOTES STUDIO */}
           {selectedCourseForModules && (
             <div className="space-y-5">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-200 pb-4">
@@ -1280,7 +1275,7 @@ export default function AdminStudio() {
                   </div>
                 </div>
 
-                {/* Right Pane: Markdown Content Editor & Interactive Preview */}
+                {/* Right Pane: Markdown Content Editor & Preview */}
                 <div className="lg:col-span-8 bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-5">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-slate-100 pb-4">
                     <div>
@@ -1323,57 +1318,27 @@ export default function AdminStudio() {
                       />
                     </div>
 
-                    {/* Content Area with Cursor-Position Image Inserter & Size Selector */}
+                    {/* Markdown Content Area */}
                     <div>
-                      <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                      <div className="flex items-center justify-between gap-2 mb-2">
                         <label className="text-xs font-bold text-slate-700">
                           Technical Notes Content (Markdown Syntax)
                         </label>
 
-                        {/* Image Size Selection & Insert Button */}
-                        <div className="flex items-center gap-2">
-                          <div className="flex items-center bg-slate-100 rounded-lg p-0.5 text-[11px] font-mono">
-                            <button
-                              type="button"
-                              onClick={() => setSelectedImageWidth('50%')}
-                              className={`px-2 py-0.5 rounded ${selectedImageWidth === '50%' ? 'bg-white font-bold text-emerald-800 shadow-sm' : 'text-slate-500'}`}
-                              title="Medium Image Size (50% Width)"
-                            >
-                              50%
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setSelectedImageWidth('75%')}
-                              className={`px-2 py-0.5 rounded ${selectedImageWidth === '75%' ? 'bg-white font-bold text-emerald-800 shadow-sm' : 'text-slate-500'}`}
-                              title="Large Image Size (75% Width)"
-                            >
-                              75%
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setSelectedImageWidth('100%')}
-                              className={`px-2 py-0.5 rounded ${selectedImageWidth === '100%' ? 'bg-white font-bold text-emerald-800 shadow-sm' : 'text-slate-500'}`}
-                              title="Full Width Image (100%)"
-                            >
-                              100%
-                            </button>
-                          </div>
-
-                          <label className="cursor-pointer bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 px-3 py-1 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition shadow-sm">
-                            <span>🖼️</span> {isUploadingMarkdownImg ? 'Uploading...' : '+ Insert Picture at Cursor'}
-                            <input
-                              type="file"
-                              accept="image/*"
-                              disabled={isUploadingMarkdownImg}
-                              onChange={(e) => {
-                                if (e.target.files && e.target.files[0]) {
-                                  handleInsertImageAtCursor(e.target.files[0]);
-                                }
-                              }}
-                              className="hidden"
-                            />
-                          </label>
-                        </div>
+                        <label className="cursor-pointer bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition shadow-sm">
+                          <span>🖼️</span> {isUploadingMarkdownImg ? 'Uploading Picture...' : '+ Insert Picture at Cursor'}
+                          <input
+                            type="file"
+                            accept="image/*"
+                            disabled={isUploadingMarkdownImg}
+                            onChange={(e) => {
+                              if (e.target.files && e.target.files[0]) {
+                                handleInsertImageAtCursor(e.target.files[0]);
+                              }
+                            }}
+                            className="hidden"
+                          />
+                        </label>
                       </div>
 
                       {editorPreviewMode === 'write' ? (
@@ -1383,7 +1348,7 @@ export default function AdminStudio() {
                           required
                           value={lessonMarkdownContent}
                           onChange={(e) => setLessonMarkdownContent(e.target.value)}
-                          placeholder="Write technical notes here... Click inside anywhere and press '+ Insert Picture at Cursor' to insert your screenshots exactly there."
+                          placeholder="Type notes here... Click anywhere inside the text and click '+ Insert Picture at Cursor' to insert diagrams exactly there."
                           className="w-full font-mono text-xs border rounded-xl p-4 bg-slate-50 focus:bg-white focus:ring-2 focus:ring-emerald-500 outline-none leading-relaxed"
                         />
                       ) : (
@@ -1901,7 +1866,7 @@ export default function AdminStudio() {
         </div>
       </main>
 
-      {/* MODAL: COURSE TRACK */}
+      {/* MODALS */}
       {isCourseModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <form onSubmit={handleSaveCourse} className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-xl border max-h-[90vh] overflow-y-auto">
@@ -1949,7 +1914,6 @@ export default function AdminStudio() {
         </div>
       )}
 
-      {/* MODAL: LAB PROOF */}
       {isLabModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <form onSubmit={handleSaveLabProof} className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-xl border">
@@ -1973,9 +1937,7 @@ export default function AdminStudio() {
               <input type="text" value={labBadge} onChange={(e) => setLabBadge(e.target.value)} placeholder="100% Solved" className="w-full border rounded-lg p-2 text-xs" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">
-                {editingLabId ? 'Replace Screenshot' : 'Select Screenshots (Instant Compression Active)'}
-              </label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Select Screenshots</label>
               {existingLabUrl && editingLabId && (
                 <div className="text-[11px] text-slate-400 mb-1">Active screenshot set</div>
               )}
@@ -1990,23 +1952,17 @@ export default function AdminStudio() {
                 }}
                 className="w-full border rounded-lg p-1.5 text-xs bg-slate-50"
               />
-              {labFiles.length > 1 && (
-                <p className="text-[11px] text-emerald-600 font-medium mt-1">
-                  ⚡ {labFiles.length} screenshots ready for ultra-fast compression upload
-                </p>
-              )}
             </div>
             <div className="flex justify-end gap-2 pt-2 border-t border-slate-100">
               <button type="button" onClick={() => setIsLabModalOpen(false)} className="px-3 py-1.5 text-xs text-slate-600">Cancel</button>
               <button type="submit" disabled={isUploading} className="bg-emerald-600 hover:bg-emerald-500 text-white px-4 py-1.5 rounded-lg text-xs font-semibold disabled:bg-slate-400 transition">
-                {isUploading ? (uploadProgressText || 'Compressing & Uploading...') : `Upload ${labFiles.length > 1 ? `${labFiles.length} Proofs` : 'to Lab Vault'}`}
+                {isUploading ? (uploadProgressText || 'Compressing & Uploading...') : `Upload to Lab Vault`}
               </button>
             </div>
           </form>
         </div>
       )}
 
-      {/* MODAL: ACADEMIC COURSEWORK */}
       {isCourseworkModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <form onSubmit={handleSaveCoursework} className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-xl border">
@@ -2043,7 +1999,6 @@ export default function AdminStudio() {
         </div>
       )}
 
-      {/* MODAL: LIVE PROJECT */}
       {isProjectModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <form onSubmit={handleSaveProject} className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-xl border">
@@ -2065,7 +2020,7 @@ export default function AdminStudio() {
               <input type="url" value={projGithubUrl} onChange={(e) => setProjGithubUrl(e.target.value)} className="w-full border rounded-lg p-2 text-xs" />
             </div>
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1">Tags (Comma separated)</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Tags</label>
               <input type="text" value={projTags} onChange={(e) => setProjTags(e.target.value)} placeholder="Next.js, Node.js, Vercel" className="w-full border rounded-lg p-2 text-xs" />
             </div>
             <div>
@@ -2080,7 +2035,6 @@ export default function AdminStudio() {
         </div>
       )}
 
-      {/* MODAL: CERTIFICATE */}
       {isCertModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <form onSubmit={handleSaveCertificate} className="bg-white rounded-3xl max-w-lg w-full p-6 space-y-4 shadow-xl border max-h-[90vh] overflow-y-auto">
@@ -2129,7 +2083,6 @@ export default function AdminStudio() {
         </div>
       )}
 
-      {/* MODAL: JOURNEY / OFFER LETTER */}
       {isJourneyModalOpen && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <form onSubmit={handleSaveJourney} className="bg-white rounded-3xl max-w-md w-full p-6 space-y-4 shadow-xl border">
