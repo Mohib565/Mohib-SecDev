@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useParams } from 'next/navigation';
 import { supabase } from '@/lib/supabase';
@@ -18,6 +18,8 @@ export default function CourseDetailPage() {
   const [modules, setModules] = useState<any[]>([]);
   const [selectedModule, setSelectedModule] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [isLessonsDropdownOpen, setIsLessonsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     async function loadCourseAndModules() {
@@ -46,6 +48,17 @@ export default function CourseDetailPage() {
     loadCourseAndModules();
   }, [courseId]);
 
+  // Click outside to close lessons dropdown
+  useEffect(() => {
+    function handleClickOutside(event: MouseEvent) {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsLessonsDropdownOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   if (loading) {
     return (
       <div className="min-h-screen bg-[#fcfcfd] flex items-center justify-center text-xs font-mono text-slate-400">
@@ -54,38 +67,101 @@ export default function CourseDetailPage() {
     );
   }
 
+  // Current Lesson Index for Next / Previous buttons
+  const currentIndex = modules.findIndex((m) => m.id === selectedModule?.id);
+  const prevModule = currentIndex > 0 ? modules[currentIndex - 1] : null;
+  const nextModule = currentIndex < modules.length - 1 ? modules[currentIndex + 1] : null;
+
   return (
     <main className="min-h-screen bg-[#fcfcfd] text-slate-900 pb-24 antialiased">
       {/* Top Header Bar */}
-      <div className="border-b border-slate-200 bg-white sticky top-0 z-20 shadow-sm">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <Link href="/" className="text-xs font-bold text-emerald-700 hover:underline flex items-center gap-1">
+      <div className="border-b border-slate-200 bg-white sticky top-0 z-30 shadow-sm">
+        <div className="max-w-5xl mx-auto px-4 sm:px-6 h-14 flex items-center justify-between gap-2">
+          {/* Left: Back Link & Title */}
+          <div className="flex items-center gap-2 sm:gap-3 truncate">
+            <Link href="/" className="text-xs font-bold text-emerald-700 hover:underline flex items-center gap-1 flex-shrink-0">
               ← Back to Vault
             </Link>
             <span className="text-slate-300">|</span>
-            <span className="font-extrabold text-slate-900 text-sm tracking-tight truncate max-w-[280px]">
+            <span className="font-extrabold text-slate-900 text-sm tracking-tight truncate">
               {course?.title || 'Course Details'}
             </span>
           </div>
 
-          <Link
-            href="/admin"
-            className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-lg font-semibold text-slate-700 transition"
-          >
-            Edit course ✏️
-          </Link>
+          {/* Right: Lessons Menu Button & Edit Button */}
+          <div className="flex items-center gap-2 sm:gap-3 flex-shrink-0">
+            {/* Lessons Dropdown Button */}
+            <div className="relative" ref={dropdownRef}>
+              <button
+                type="button"
+                onClick={() => setIsLessonsDropdownOpen(!isLessonsDropdownOpen)}
+                className="bg-emerald-50 hover:bg-emerald-100 text-emerald-900 border border-emerald-300 px-3 py-1.5 rounded-xl text-xs font-bold flex items-center gap-1.5 transition shadow-sm"
+              >
+                <span>📚</span>
+                <span>Lessons ({modules.length})</span>
+                <span className="text-[10px] text-emerald-700">▼</span>
+              </button>
+
+              {/* Dropdown Popup List */}
+              {isLessonsDropdownOpen && (
+                <div className="absolute right-0 mt-2 w-72 sm:w-80 bg-white border border-slate-200 rounded-2xl shadow-xl p-2 z-50 max-h-96 overflow-y-auto space-y-1">
+                  <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">Course Curriculum</span>
+                    <span className="text-[10px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-bold">
+                      {currentIndex + 1} of {modules.length}
+                    </span>
+                  </div>
+                  {modules.map((m, idx) => (
+                    <button
+                      key={m.id}
+                      onClick={() => {
+                        setSelectedModule(m);
+                        setIsLessonsDropdownOpen(false);
+                        window.scrollTo({ top: 0, behavior: 'smooth' });
+                      }}
+                      className={`w-full text-left p-2.5 rounded-xl text-xs font-semibold transition flex items-center justify-between ${
+                        selectedModule?.id === m.id
+                          ? 'bg-emerald-600 text-white shadow-sm'
+                          : 'hover:bg-slate-50 text-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <span className={`font-mono text-[10px] ${selectedModule?.id === m.id ? 'text-emerald-100' : 'text-slate-400'}`}>
+                          #{idx + 1}
+                        </span>
+                        <span className="truncate">{m.title}</span>
+                      </div>
+                      {selectedModule?.id === m.id && <span className="text-xs">✓</span>}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <Link
+              href="/admin"
+              className="text-xs bg-slate-100 hover:bg-slate-200 px-3 py-1.5 rounded-xl font-semibold text-slate-700 transition hidden sm:inline-block"
+            >
+              Edit course ✏️
+            </Link>
+          </div>
         </div>
       </div>
 
-      <div className="max-w-6xl mx-auto px-4 sm:px-6 py-8 md:py-12 grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
-        {/* Left Side: Markdown Reader Pane */}
-        <div className="lg:col-span-8 bg-white border border-slate-200 rounded-3xl p-6 sm:p-10 shadow-sm space-y-6">
-          <div className="border-b border-slate-100 pb-4">
-            <span className="text-[10px] uppercase tracking-wider font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-md">
-              {course?.category || 'Technical Track'}
-            </span>
-            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 mt-2 tracking-tight">
+      {/* Main Full-Width Centered Reading Workspace */}
+      <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8 md:py-10">
+        <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-12 shadow-sm space-y-8">
+          {/* Header Tag & Title */}
+          <div className="border-b border-slate-100 pb-5">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="text-[10px] uppercase tracking-wider font-extrabold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-md">
+                {course?.category || 'Technical Track'}
+              </span>
+              <span className="text-xs text-slate-400 font-mono">
+                Lesson {currentIndex + 1} of {modules.length}
+              </span>
+            </div>
+            <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight">
               {selectedModule?.title || 'Module Notes'}
             </h1>
           </div>
@@ -97,7 +173,7 @@ export default function CourseDetailPage() {
                 remarkPlugins={[remarkGfm, remarkMath]}
                 rehypePlugins={[rehypeKatex]}
                 components={{
-                  // Isolated Image Renderer (Guaranteed 50%, 75%, 100% Support)
+                  // Full Control Image Renderer with 50%, 75%, 100% Options
                   img: ({ node, ...props }) => {
                     const src = String(props.src || '');
                     const alt = String(props.alt || '');
@@ -146,17 +222,17 @@ export default function CourseDetailPage() {
                     );
                   },
                   h1: ({ children }) => (
-                    <h1 className="text-xl sm:text-2xl font-black text-slate-900 mt-7 mb-3 tracking-tight border-b border-slate-100 pb-2">
+                    <h1 className="text-xl sm:text-2xl font-black text-slate-900 mt-8 mb-4 tracking-tight border-b border-slate-100 pb-2">
                       {children}
                     </h1>
                   ),
                   h2: ({ children }) => (
-                    <h2 className="text-lg sm:text-xl font-bold text-slate-900 mt-6 mb-3 tracking-tight">
+                    <h2 className="text-lg sm:text-xl font-bold text-slate-900 mt-7 mb-3 tracking-tight">
                       {children}
                     </h2>
                   ),
                   h3: ({ children }) => (
-                    <h3 className="text-sm sm:text-base font-bold text-slate-900 mt-4 mb-2">
+                    <h3 className="text-sm sm:text-base font-bold text-slate-900 mt-5 mb-2">
                       {children}
                     </h3>
                   ),
@@ -235,7 +311,7 @@ export default function CourseDetailPage() {
             )}
           </div>
 
-          {/* Downloadable PDF Section */}
+          {/* Downloadable PDF Section (Optional Resource) */}
           {selectedModule?.pdf_url && (
             <div className="pt-6 border-t border-slate-100 flex items-center justify-between bg-slate-50 p-4 rounded-2xl border border-slate-200">
               <div className="flex items-center gap-2 text-xs text-slate-700 font-semibold">
@@ -251,35 +327,40 @@ export default function CourseDetailPage() {
               </a>
             </div>
           )}
-        </div>
 
-        {/* Right Side: Curriculum Sidebar */}
-        <div className="lg:col-span-4 space-y-6">
-          <div className="bg-white border border-slate-200 rounded-3xl p-6 shadow-sm space-y-4">
-            <div>
-              <h3 className="font-bold text-slate-900 text-sm">Curriculum Lessons</h3>
-              <p className="text-[11px] text-slate-400 mt-0.5">{modules.length} lessons &bull; Self-paced</p>
-            </div>
+          {/* Bottom Next / Previous Lesson Navigation Bar */}
+          <div className="pt-8 border-t border-slate-200 flex items-center justify-between gap-4">
+            {prevModule ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedModule(prevModule);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-xs transition"
+              >
+                <span>←</span>
+                <span className="truncate max-w-[140px] sm:max-w-xs">{prevModule.title}</span>
+              </button>
+            ) : (
+              <div />
+            )}
 
-            <div className="space-y-2">
-              {modules.map((m, idx) => (
-                <button
-                  key={m.id}
-                  onClick={() => setSelectedModule(m)}
-                  className={`w-full text-left p-3.5 rounded-2xl text-xs font-semibold transition flex items-center justify-between border ${
-                    selectedModule?.id === m.id
-                      ? 'bg-emerald-50 border-emerald-400 text-emerald-950 shadow-sm'
-                      : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
-                  }`}
-                >
-                  <div className="flex items-center gap-2.5 truncate">
-                    <span className="font-mono text-[10px] text-slate-400 font-bold">#{idx + 1}</span>
-                    <span className="truncate">{m.title}</span>
-                  </div>
-                  <span className="text-[10px] text-slate-400 font-normal">Read</span>
-                </button>
-              ))}
-            </div>
+            {nextModule ? (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedModule(nextModule);
+                  window.scrollTo({ top: 0, behavior: 'smooth' });
+                }}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-semibold text-xs transition shadow-sm ml-auto"
+              >
+                <span className="truncate max-w-[140px] sm:max-w-xs">{nextModule.title}</span>
+                <span>→</span>
+              </button>
+            ) : (
+              <div />
+            )}
           </div>
         </div>
       </div>
